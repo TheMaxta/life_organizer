@@ -17,7 +17,9 @@ class Calendar:
                 {
                     "name": action.name,
                     "description": action.description,
-                    "duration": action.duration,
+                    "start_time": action.start_time.strftime("%H:%M"),
+                    "end_time": action.end_time.strftime("%H:%M"),
+                    "duration": action.get_duration_string(),
                     "type": action.__class__.__name__,
                     "days": action.days if hasattr(action, 'days') else None,
                     "frequency": action.frequency.name if hasattr(action, 'frequency') else None,
