@@ -28,12 +28,22 @@ def display_calendar(year, month, user_calendar):
                 else:
                     cols[i].write(day)
 
+def generate_time_options():
+    times = []
+    for hour in range(24):
+        for minute in [0, 30]:
+            time = datetime.strptime(f"{hour:02d}:{minute:02d}", "%H:%M").strftime("%I:%M %p")
+            times.append(time)
+    return times
+
 def time_input(label, key):
-    return st.time_input(label, datetime.now().time(), step=timedelta(minutes=15), key=key)
+    time_options = generate_time_options()
+    selected_time = st.selectbox(label, time_options, key=key)
+    return datetime.strptime(selected_time, "%I:%M %p").time()
 
 def duration_input(label, key):
     hours = st.number_input(f"{label} (hours)", min_value=0, value=1, step=1, key=f"{key}_hours")
-    minutes = st.number_input(f"{label} (minutes)", min_value=0, max_value=59, value=0, step=15, key=f"{key}_minutes")
+    minutes = st.selectbox(f"{label} (minutes)", [0, 30], key=f"{key}_minutes")
     return timedelta(hours=hours, minutes=minutes)
 
 def main():
@@ -58,11 +68,9 @@ def main():
         with col2:
             duration = duration_input("Duration", "routine_duration")
         with col3:
-            end_time = time_input("End Time", "routine_end")
-        
-        if start_time and duration:
             calculated_end_time = (datetime.combine(datetime.today(), start_time) + duration).time()
-            end_time = st.time_input("Calculated End Time", calculated_end_time, disabled=True)
+            end_time = time_input("End Time", "routine_end")
+            st.write(f"Calculated End Time: {calculated_end_time.strftime('%I:%M %p')}")
         
         routine_days = st.multiselect("Days", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="routine_days")
         routine_frequency = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly", "Yearly"], key="routine_frequency")
@@ -85,11 +93,9 @@ def main():
         with col2:
             duration = duration_input("Duration", "uncommon_duration")
         with col3:
-            end_time = time_input("End Time", "uncommon_end")
-        
-        if start_time and duration:
             calculated_end_time = (datetime.combine(datetime.today(), start_time) + duration).time()
-            end_time = st.time_input("Calculated End Time", calculated_end_time, disabled=True)
+            end_time = time_input("End Time", "uncommon_end")
+            st.write(f"Calculated End Time: {calculated_end_time.strftime('%I:%M %p')}")
         
         uncommon_date = st.date_input("Date", key="uncommon_date")
 
