@@ -3,6 +3,7 @@ import calendar
 from datetime import datetime, timedelta
 from calendar_app.models.calendar import Calendar
 from calendar_app.models.actions import RoutineAction, UncommonAction, Frequency
+from calendar_app.database import init_db
 from calendar_app.utils.llm_integration import get_llm_guidance
 
 def display_calendar(year, month, user_calendar):
@@ -46,11 +47,62 @@ def duration_input(label, key):
     minutes = st.selectbox(f"{label} (minutes)", [0, 30], key=f"{key}_minutes")
     return timedelta(hours=hours, minutes=minutes)
 
+
+def display_updates(suggested_updates):
+    st.subheader("Suggested Updates")
+    for action in suggested_updates['actions']:
+        st.write(f"Operation: {action['operation']}")
+        st.write(f"Name: {action['name']}")
+        st.write(f"Description: {action['description']}")
+        st.write(f"Time: {action['start_time']} - {action['end_time']}")
+        if action['type'] == 'RoutineAction':
+            st.write(f"Days: {', '.join([calendar.day_name[d] for d in action['days']])}")
+            st.write(f"Frequency: {action['frequency']}")
+        else:
+            st.write(f"Date: {action['date']}")
+        st.write("---")
+
+def apply_updates(calendar, suggested_updates):
+    for action in suggested_updates['actions']:
+        if action['operation'] == 'add':
+            if action['type'] == 'RoutineAction':
+                new_action = RoutineAction(
+                    action['name'],
+                    action['description'],
+                    datetime.strptime(action['start_time'], "%H:%M").time(),
+                    datetime.strptime(action['end_time'], "%H:%M").time(),
+                    action['days'],
+                    Frequency[action['frequency']]
+                )
+            else:
+                new_action = UncommonAction(
+                    action['name'],
+                    action['description'],
+                    datetime.strptime(action['start_time'], "%H:%M").time(),
+                    datetime.strptime(action['end_time'], "%H:%M").time(),
+                    datetime.strptime(action['date'], "%Y-%m-%d").date()
+                )
+            calendar.add_action(new_action)
+        elif action['operation'] == 'update':
+            # Implement update logic
+            pass
+        elif action['operation'] == 'delete':
+            # Implement delete logic
+            pass
+    return calendar
+
+
 def main():
     st.title("Personalized Calendar App")
+    
+    # Initialize the database
+    init_db()
 
+
+    # Create a new Calendar instance for this session
     if 'calendar' not in st.session_state:
         st.session_state.calendar = Calendar()
+    
 
     today = datetime.now()
     display_calendar(today.year, today.month, st.session_state.calendar)
@@ -119,15 +171,23 @@ def main():
             st.write("No actions scheduled for this date.")
 
     with tab4:
+
         st.header("Get AI Guidance")
-        user_query = st.text_input("Ask for guidance based on your calendar")
+        user_input = st.text_area("Describe changes to your calendar")
         if st.button("Get Guidance"):
-            calendar_json = st.session_state.calendar.to_json()
-            try:
-                guidance = get_llm_guidance(calendar_json, user_query)
-                st.write(guidance)
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+            current_calendar = st.session_state.calendar.to_json()
+            suggested_updates = get_llm_guidance(user_input, current_calendar)
+            
+            if 'error' in suggested_updates:
+                st.error(suggested_updates['error'])
+            else:
+                display_updates(suggested_updates)
+                if st.button("Apply Changes"):
+                    st.session_state.calendar = apply_updates(st.session_state.calendar, suggested_updates)
+                    st.success("Calendar updated successfully!")
+
+    # Close the database session when the app is done
+    st.session_state.calendar.close()
 
 if __name__ == "__main__":
     main()

@@ -1,37 +1,48 @@
-import requests
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 import json
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
-def get_llm_guidance(calendar_json, user_query):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("No API key found. Please set the OPENAI_API_KEY environment variable in the .env file.")
 
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-    data = {
-        "model": "gpt-3.5-turbo",
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant that provides guidance based on a user's calendar. The calendar data will be provided in JSON format."
-            },
-            {
-                "role": "user",
-                "content": f"Here is my calendar data: {calendar_json}\n\nBased on this, {user_query}"
-            }
+def get_llm_guidance(user_input, current_calendar):
+    prompt = f"""
+    Given the following calendar and user input, suggest updates to the calendar in JSON format.
+    Current calendar:
+    {json.dumps(current_calendar, indent=2)}
+
+    User input: {user_input}
+
+    Provide a JSON response with the following structure:
+    {{
+        "actions": [
+            {{
+                "operation": "add" or "update" or "delete",
+                "name": "Action name",
+                "description": "Action description",
+                "start_time": "HH:MM",
+                "end_time": "HH:MM",
+                "type": "RoutineAction" or "UncommonAction",
+                "days": [0,1,2,3,4,5,6] (for RoutineAction, where 0 is Monday),
+                "frequency": "DAILY" or "WEEKLY" or "MONTHLY" or "YEARLY" (for RoutineAction),
+                "date": "YYYY-MM-DD" (for UncommonAction)
+            }}
         ]
-    }
+    }}
+    """
 
-    response = requests.post(url, headers=headers, data=json.dumps(data))
+    response = client.chat.completions.create(model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant that translates natural language calendar updates into JSON format."},
+        {"role": "user", "content": prompt}
+    ])
 
-    if response.status_code == 200:
-        return response.json()['choices'][0]['message']['content']
-    else:
-        raise Exception(f"API request failed with status code {response.status_code}: {response.text}")
+    try:
+        suggested_updates = json.loads(response.choices[0].message.content)
+        return suggested_updates
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse LLM response"}
+
